@@ -6,8 +6,9 @@
  *  in compliance with the License. You may obtain a copy of the License at:
  *
  *      http://www.apache.org/licenses/LICENSE-2.0
- 
- *  Original device handler code by Tomas Axerot for Ubisys Power switch S2, adapted with code parts of Aqara model by bspranger, for Xiaomi Aqara Switch QBKG12LM by dschich
+ *
+ *  Original device handler code by Tomas Axerot for Ubisys Power switch S2, adapted with code parts of 
+ *  Aqara model by bspranger, for Xiaomi Aqara Switch QBKG12LM by dschich
  *  
  *
  *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
