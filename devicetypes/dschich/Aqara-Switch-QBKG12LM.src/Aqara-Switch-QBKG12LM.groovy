@@ -22,7 +22,7 @@ metadata {
     definition (name: "Xiaomi Aqara Switch QBKG12LM", namespace: "dschich", author: "Diego Schich") {
         capability "Actuator"
         capability "Switch"
-        capability "Battery"
+        //capability "Battery"
         //capability "Configuration"
         capability "Refresh"
         capability "Sensor"
@@ -82,69 +82,66 @@ metadata {
 }
 
 def parse(String description) {
-    log.trace "parse: description is $description"
-        
-    if (description?.startsWith("on/off")) {
-    	//Trigger read of cluster 6 EndPoint 1/2, need to poll due to missing endpoint in attribute report
-        def cmds = zigbee.readAttribute(0x0006, 0x0000, [destEndpoint: 0x01]) + zigbee.readAttribute(0x0006, 0x0000, [destEndpoint: 0x02])		
-		return cmds.collect { new physicalgraph.device.HubAction(it) }        
+    log.debug "Log descrição: $description"
+    //def event = zigbee.getEvent(description)
+    if (event) {
+        sendEvent(event)
     }
-    
-    def map = zigbee.parseDescriptionAsMap(description)
-    if(map) {
-    	if (map.clusterInt == 0x0006 && map.attrInt == 0x00 && map.commandInt == 0x01) {
-			// log.debug "parse: switch read from EndPoint $map.sourceEndpoint"
-            if(map.sourceEndpoint == "01") {
-            	def now = formatDate()
-    			sendEvent(name: "lastCheckin", value: now)
-            	return createEvent(name: "switch", value: map.value == "01" ? "on" : "off")
-            } else if(map.sourceEndpoint == "02") {            	
-            	return childDevices[0].sendEvent(name: "switch", value: map.value == "01" ? "on" : "off")
-            }            
-        } else if (map.clusterInt == 0x0006 && map.commandInt == 0x0B) {
-			// log.debug "parse: switch set for EndPoint $map.sourceEndpoint"
-            if(map.sourceEndpoint == "01") {            	
-            	return createEvent(name: "switch", value: map.data[0] == "01" ? "on" : "off")
-            } else if(map.sourceEndpoint == "02") {            	
-            	return childDevices[0].sendEvent(name: "switch", value: map.data[0] == "01" ? "on" : "off")
-            }            
-        } else if (map.clusterInt == 0x0001 && map.attrInt == 0x000) {
-        	def result = map.value[0..3]
-            float voltage = Integer.parseInt(result, 16) /10
-            //log.debug voltage
-            sendEvent(name: "voltage", value: voltage, displayed: true)
-
-
-        } else if (map.clusterInt == 0x0002 && map.attrInt == 0x000) {
-        	def temp = map.value[0..3]
-            float deviceTemperature = Integer.parseInt(temp)
-            if (tempOffset) {
-			deviceTemperature = (int) deviceTemperature + (int) tempOffset
-		}
-           
-            log.debug "$deviceTemperature °C"
-            sendEvent(name: "deviceTemperature", value: deviceTemperature, displayed: false)
-  
-        } else if(!shouldProcessMessage(map)) {
-        	log.trace "parse: map message ignored"            
-        } else {
-        	log.warn "parse: failed to process map $map"
+    else {
+        if ((description?.startsWith("catchall:")) || (description?.startsWith("read attr -"))) {
+            def descMap = zigbee.parseDescriptionAsMap(description)
+            //log.warn "$descMap"
+            //lastCheckin
+            if (descMap.clusterInt == 0x0006 && descMap.attrInt == 0x00 && descMap.commandInt == 0x01) {
+                if(descMap.sourceEndpoint == "01") {
+                 def now = formatDate()
+                 sendEvent(name: "lastCheckin", value: now)
+                 return createEvent(name: "switch", value: descMap.value == "01" ? "on" : "off")
+              } else if(descMap.sourceEndpoint == "02") {              
+                 return childDevices[0].sendEvent(name: "switch", value: descMap.value == "01" ? "on" : "off")
+              }
+            }
+            // APP Button
+            else if (descMap.clusterInt == 0x0006 && descMap.commandInt == 0x0B) {
+                if(descMap.sourceEndpoint == "01") {               
+                 return createEvent(name: "switch", value: descMap.data[0] == "01" ? "on" : "off")
+              } else if(descMap.sourceEndpoint == "02") {              
+                return childDevices[0].sendEvent(name: "switch", value: descMap.data[0] == "01" ? "on" : "off")
+              }
+            }
+            // Switch Button
+            else if (descMap.clusterInt == 0x0006 && descMap.attrInt == 0x00) {
+                def cmds = zigbee.readAttribute(0x0006, 0x0000, [destEndpoint: 0x01]) + zigbee.readAttribute(0x0006, 0x0000, [destEndpoint: 0x02])     
+                 return cmds.collect { new physicalgraph.device.HubAction(it) }
+                if(descMap.endpoint == "01") {             
+                 return createEvent(name: "switch", value: descMap.value[0] == "01" ? "on" : "off")
+             } else if(descMap.endpoint == "02") {             
+                return childDevices[0].sendEvent(name: "switch", value: descMap.value[0] == "01" ? "on" : "off")
+             }
+            }
+            // Voltage
+            else if (descMap.clusterInt == 0x0001 && descMap.attrInt == 0x000) {
+                def result = descMap.value[0..3]
+                float voltage = Integer.parseInt(result, 16) /10
+                //log.debug voltage
+                sendEvent(name: "voltage", value: voltage, displayed: true)
+            }
+            // Temperature
+            else if (descMap.clusterInt == 0x0002 && descMap.attrInt == 0x000) {
+                 def temp = descMap.value[0..3]
+                 float deviceTemperature = Integer.parseInt(temp)
+                 if (tempOffset) {
+                  deviceTemperature = (int) deviceTemperature + (int) tempOffset
+                 }
+                 log.debug "$deviceTemperature °C"
+                 sendEvent(name: "deviceTemperature", value: deviceTemperature, displayed: false)
+            }
         }
-        return null
+ 
+        //log.debug "Parse returned $event"
+        def result = event ? createEvent(event) : []
+ 
     }
-    
-    log.warn "parse: failed to process message"	
-    return null
-}
-
-private boolean shouldProcessMessage(map) {
-    // 0x0B is default response
-    // 0x07 is configure reporting response
-    boolean ignoredMessage = map.profileId != 0x0104 ||
-        map.commandInt == 0x0B ||
-        map.commandInt == 0x07 ||
-        (map.data.size() > 0 && Integer.parseInt(map.data[0], 16) == 0x3e)
-    return !ignoredMessage
 }
 
 def off() {
