@@ -1,6 +1,6 @@
 /**
  *  Xiaomi Aqara Switch QBKG12LM
- *  ver 1.0
+ *  ver 1.01
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
